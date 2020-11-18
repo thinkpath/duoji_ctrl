@@ -142,7 +142,7 @@ FSUS_STATUS recvPack(){
         // 数据接收是否完成
         if(curIdx==1){
             // 校验帧头
-            responsePack.header = responsePack.recv_buffer[curIdx-1] | curByte << 8;
+            responsePack.header = responsePack.recv_buffer[curIdx-1] | curByte << 8; //拼接
             if(responsePack.header!=FSUS_PACK_RESPONSE_HEADER){
                 return FSUS_STATUS_WRONG_RESPONSE_HEADER;
             }
@@ -167,7 +167,7 @@ FSUS_STATUS recvPack(){
             // 接收校验合
             responsePack.checksum = curByte;
             // 检查校验和是否匹配
-            FSUS_CHECKSUM_T checksum = calcPackChecksum(&responsePack);
+            FSUS_CHECKSUM_T checksum = calcPackChecksum(&responsePack); //TODO:
             // if (responsePack.cmdId == FSUS_CMD_QUERY_ANGLE){
             //     checksum -= 0x03;// TODO Delete 不知道为什么要这样
             // }
@@ -183,3 +183,77 @@ FSUS_STATUS recvPack(){
 
 //TODO: 串口读命令，返回byte
 unsigned char serial_read(); 
+
+// 发送PING的请求包
+void sendPing(unsigned char servoId){
+    requestPack.cmdId = FSUS_CMD_PING; //0x01
+    requestPack.content_size = 1;
+    requestPack.content[0] = servoId;
+    sendPack(); // 发送包
+}
+
+// 接收PING的响应包
+FSUS_STATUS recvPing(unsigned char *servoId, bool *isOnline){
+    // 接收数据帧
+    FSUS_STATUS status = recvPack();
+    *servoId = responsePack.content[0]; // 提取舵机ID
+    *isOnline = (status == FSUS_STATUS_SUCCESS);
+    responsePack.recv_status = status;
+    return status;
+}
+
+
+// 发送旋转的请求包
+void sendSetAngle(unsigned char servoId, float angle,unsigned int interval,unsigned int power){
+    requestPack.cmdId = FSUS_CMD_SET_ANGLE; // 指令ID 0x08
+    requestPack.content_size = 7; // 内容长度
+    requestPack.content[0]=servoId; //舵机ID
+    int angle_int = angle * 10; //舵机的角度
+    requestPack.content[1] = angle_int & 0xFF;
+    requestPack.content[2] = angle_int >> 8;
+    requestPack.content[3] = interval & 0xFF; //周期
+    requestPack.content[4] = interval >> 8;
+    requestPack.content[5] = power & 0xFF; //功率
+    requestPack.content[6] = power >> 8;
+    sendPack();
+}
+
+
+// 发送阻尼模式
+void sendDammping(unsigned char servoId, unsigned int power){
+    requestPack.cmdId = FSUS_CMD_DAMPING;//指令ID 0x09
+    requestPack.content_size = 3;
+    requestPack.content[0] = servoId;
+    requestPack.content[1] = power & 0xFF;
+    requestPack.content[2] = power >> 8;
+    sendPack();
+}
+
+// 发送舵机角度查询指令
+void sendQueryAngle(unsigned char servoId){
+    requestPack.cmdId = FSUS_CMD_QUERY_ANGLE;//指令ID 0x0a
+    requestPack.content_size = 1;
+    requestPack.content[0] = servoId;
+    sendPack();
+}
+
+// 接收角度查询指令
+FSUS_STATUS recvQueryAngle(unsigned char *servoId, float *angle){
+    FSUS_STATUS status = recvPack();
+    int angleVal;
+    unsigned char* angleValPtr = (unsigned char*)&angleVal;
+    
+    // angleVal = responsePack.content[1] + responsePack.content[2] << 8;
+    // if(status == FSUS_STATUS_SUCCESS){
+    // 偶尔会出现校验和错误的情况, 临时允许
+    if(status == FSUS_STATUS_SUCCESS || status==FSUS_STATUS_CHECKSUM_ERROR){
+        (*servoId) = responsePack.content[0];
+        
+        angleValPtr[0] = responsePack.content[1];
+        angleValPtr[1] = responsePack.content[2];
+        (*angle) = 0.1*angleVal;
+        // (*angle) = 0.1 * (int)(responsePack.content[1] | responsePack.content[2]<< 8);
+    }
+    responsePack.recv_status = status;
+    return status;
+}
