@@ -237,7 +237,7 @@ void sendQueryAngle(unsigned char servoId){
     sendPack();
 }
 
-// 接收角度查询指令
+// 接收角度查询结果
 FSUS_STATUS recvQueryAngle(unsigned char *servoId, float *angle){
     FSUS_STATUS status = recvPack();
     int angleVal;
