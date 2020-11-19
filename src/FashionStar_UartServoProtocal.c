@@ -4,8 +4,8 @@
 
 #include "FashionStar_UartServoProtocal.h"
 
-typedef unsigned short uint16_t
-typedef unsigned char uint8_t
+typedef unsigned short uint16_t;
+typedef unsigned char uint8_t;
 
 typedef unsigned char FSUS_SERVO_ID_T; //舵机ID的格式
 typedef char* FSUS_SERVO_NAME_T; //舵机的名称
@@ -43,7 +43,7 @@ typedef struct{
     FSUS_STATUS recv_status; // Package的状态码
     uint8_t recv_cnt; // 接收字符的计数
     uint8_t recv_buffer[FSUS_PACK_RESPONSE_MAX_SIZE]; // 临时,测试用
-}FSUS_PACKAGE_T;
+} FSUS_PACKAGE_T;
 
 
 
@@ -62,7 +62,6 @@ FSUS_PACKAGE_T requestPack;
 
 // 加工并发送请求数据包
 void sendPack() {
-    
     // 数据加工
     requestPack.header = FSUS_PACK_REQUEST_HEADER; // 数据头
     // 计算校验码
@@ -125,7 +124,7 @@ FSUS_STATUS recvPack(){
     // responsePack.recv_status = 0; //重置标志位
     responsePack.recv_cnt = 0; // 数据帧接收标志位
     
-    while(true){ //TODO: 替换成中断更好，避免一直循环等待
+    while(TRUE){ //TODO: 替换成中断更好，避免一直循环等待
         // 超时判断
         if((millis() - start_time) > FSUS_TIMEOUT_MS){ //TODO: 与系统匹配  
             return FSUS_STATUS_TIMEOUT;
@@ -134,8 +133,8 @@ FSUS_STATUS recvPack(){
         if (serial_available==0){ //TODO: serial_available待接口定义
             continue;
         }
-        uint8_t curByte = serial_read();
-        uint8_t curIdx = responsePack.recv_cnt;
+        unsigned char curByte = serial_read();
+        unsigned char curIdx = responsePack.recv_cnt;
         responsePack.recv_buffer[curIdx] = curByte; // 接收一个字节
         responsePack.recv_cnt+=1; // 计数自增
         
@@ -239,7 +238,7 @@ void sendQueryAngle(unsigned char servoId){
 
 // 接收角度查询结果
 FSUS_STATUS recvQueryAngle(unsigned char *servoId, float *angle){
-    FSUS_STATUS status = recvPack();
+    unsigned char status = recvPack();
     int angleVal;
     unsigned char* angleValPtr = (unsigned char*)&angleVal;
     
@@ -257,3 +256,56 @@ FSUS_STATUS recvQueryAngle(unsigned char *servoId, float *angle){
     responsePack.recv_status = status;
     return status;
 }
+
+// 轮式控制模式
+void sendWheelMove(unsigned char servoId, unsigned char method, unsigned int speed, unsigned short value){
+    requestPack.cmdId = FSUS_CMD_WHEEL;
+    requestPack.content_size = 6;
+    requestPack.content[0] = servoId;
+    requestPack.content[1] = method;
+    requestPack.content[2] = speed & 0xFF;
+    requestPack.content[3] = speed >> 8;
+    requestPack.content[4] = value & 0xFF;
+    requestPack.content[5] = value >> 8;
+    sendPack();
+}
+
+// 轮子停止转动
+void sendWheelStop(unsigned char servoId){
+    unsigned char method = 0;
+    unsigned short  speed = 0;
+	unsigned short  value = 0;
+    sendWheelMove(servoId, method, speed, value);
+}
+
+// 轮子持续旋转
+void sendWheelKeepMove(unsigned char servoId, unsigned char is_cw, unsigned short speed){
+    unsigned char method = 0x01; // 持续旋转
+	if (is_cw){
+		// 顺时针旋转
+		method = method | 0x80;
+	}
+	unsigned int value = 0;
+    sendWheelMove(servoId, method, speed, value);
+}
+
+// 指定旋转的时间
+void sendWheelMoveTime(unsigned char servoId, unsigned char is_cw, unsigned short speed, unsigned short nTime){
+    unsigned char method = 0x03; // 旋转一段时间
+	if (is_cw){
+		// 顺时针旋转
+		method = method | 0x80;
+	}
+    sendWheelMove(servoId, method, speed, nTime);
+}
+
+// 轮式模式 旋转特定的圈数
+void sendWheelMoveNCircle(unsigned char servoId, unsigned char is_cw, unsigned short speed, unsigned short nCircle){
+    unsigned char method = 0x02; // 旋转特定的圈数
+	if (is_cw){
+		// 顺时针旋转
+		method = method | 0x80;
+	}
+    sendWheelMove(servoId, method, speed, nCircle);
+}
+
