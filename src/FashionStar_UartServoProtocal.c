@@ -3,6 +3,7 @@
  *********************************/
 
 #include "FashionStar_UartServoProtocal.h"
+#include <stdbool.h>
 
 typedef unsigned short uint16_t;
 typedef unsigned char uint8_t;
@@ -124,7 +125,7 @@ FSUS_STATUS recvPack(){
     // responsePack.recv_status = 0; //重置标志位
     responsePack.recv_cnt = 0; // 数据帧接收标志位
     
-    while(TRUE){ //TODO: 替换成中断更好，避免一直循环等待
+    while(true){ //TODO: 替换成中断更好，避免一直循环等待
         // 超时判断
         if((millis() - start_time) > FSUS_TIMEOUT_MS){ //TODO: 与系统匹配  
             return FSUS_STATUS_TIMEOUT;
