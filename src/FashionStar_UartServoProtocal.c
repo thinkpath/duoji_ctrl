@@ -4,7 +4,7 @@
 
 #include "FashionStar_UartServoProtocal.h"
 #include <stdbool.h>
-
+/*
 typedef unsigned short uint16_t;
 typedef unsigned char uint8_t;
 
@@ -21,6 +21,19 @@ typedef unsigned char FSUS_CHECKSUM_T; // 校验和的数据类型
 //typedef byte FSUS_CHECKSUM_T; // 校验和的数据类型
 
 
+// FSUS控制指令数据
+// 注: 一下所有的指令都是针对单个舵机的
+#define FSUS_CMD_PING				0x01 // 舵机通讯检测
+#define FSUS_CMD_RESET_USER_DATA	0x02 // 重置用户数据
+#define FSUS_CMD_READ_DATA			0x03 // 单个舵机 读取数据库
+#define FSUS_CMD_WRITE_DATA			0x04 // 单个舵机 写入数据块
+#define FSUS_CMD_READ_BATCH_DATA	0x05 // 单个舵机 批次读取(读取一个舵机所有的数据)
+#define FSUS_CMD_WRITE_BATCH_DATA	0x06 // 单个舵机 批次写入(写入一个舵机所有的数据)
+#define FSUS_CMD_WHEEL				0x07 // 单个舵机 设置轮式模式
+#define FSUS_CMD_SET_ANGLE			0x08 // 角度控制模式(设置舵机的角度)) 
+#define FSUS_CMD_DAMPING			0x09 // 阻尼模式
+#define FSUS_CMD_QUERY_ANGLE		0x0a // 舵机角度读取
+
 // FSUS状态码
 #define FSUS_STATUS uint8_t
 #define FSUS_STATUS_SUCCESS 0 // 设置/读取成功
@@ -32,6 +45,9 @@ typedef unsigned char FSUS_CHECKSUM_T; // 校验和的数据类型
 #define FSUS_STATUS_CHECKSUM_ERROR 6 // 校验和错误
 #define FSUS_STATUS_ID_NOT_MATCH 7 // 请求的舵机ID跟反馈回来的舵机ID不匹配
 #define FSUS_STATUS_TIMEOUT 8 // 等待超时
+
+#define FSUS_PACK_RESPONSE_MAX_SIZE 50
+#define FSUS_TIMEOUT_MS 100
 
 // 请求数据帧的结构体
 typedef struct{
@@ -54,12 +70,22 @@ typedef struct{
 
 #define FSUS_PACK_REQUEST_HEADER		0x4c12
 #define FSUS_PACK_RESPONSE_HEADER		0x1c05
+*/
+
+// 初始化
+void FSUS_init(){
+    unsigned long baudrate = 115200; //TODO: link to RS232
+}
+
 
 /************************************
  * 发送数据包
  * *********************************/
 
 FSUS_PACKAGE_T requestPack;
+
+// 写串口数据
+void serial_write(unsigned char send_data); //TODO: 需要跟实际的串口接口匹配
 
 // 加工并发送请求数据包
 void sendPack() {
@@ -82,24 +108,6 @@ void sendPack() {
 void emptyCache();
 
 
-// 写串口数据
-void serial_write(unsigned char send_data); //TODO: 需要跟实际的串口接口匹配
-
-//计算CRC校验码
-FSUS_CHECKSUM_T calcPackChecksum(const FSUS_PACKAGE_T *package){
-    // uint16_t checksum = 0;
-    int checksum = 0;
-    checksum += (package.header & 0xFF);
-    checksum += (package.header >> 8);
-    checksum += package.cmdId;
-    checksum += package.content_size;
-    for(int i=0; i<package.content_size; i++){
-        checksum += package.content[i];
-    }
-    
-    return (FSUS_CHECKSUM_T)(checksum%256);
-}
-
 /*******************************
  * 接收数据包
  * *****************************/
@@ -110,13 +118,16 @@ FSUS_PACKAGE_T responsePack;
 void initResponsePack(){
     // 初始化响应包的数据
     //发送数据的缓冲区
-    
     responsePack.header = 0;
     responsePack.cmdId = 0;
     responsePack.content_size = 0;
     responsePack.checksum = 0;
     responsePack.recv_cnt = 0;
 }
+
+
+//TODO: 串口读命令，返回byte
+unsigned char serial_read(); 
 
 // 接收响应包 
 FSUS_STATUS recvPack(){
@@ -168,9 +179,6 @@ FSUS_STATUS recvPack(){
             responsePack.checksum = curByte;
             // 检查校验和是否匹配
             FSUS_CHECKSUM_T checksum = calcPackChecksum(&responsePack); //TODO:
-            // if (responsePack.cmdId == FSUS_CMD_QUERY_ANGLE){
-            //     checksum -= 0x03;// TODO Delete 不知道为什么要这样
-            // }
             
             if (checksum != responsePack.checksum){
                 return FSUS_STATUS_CHECKSUM_ERROR;
@@ -181,8 +189,27 @@ FSUS_STATUS recvPack(){
     }
 }
 
-//TODO: 串口读命令，返回byte
-unsigned char serial_read(); 
+
+
+//计算CRC校验码
+FSUS_CHECKSUM_T calcPackChecksum(const FSUS_PACKAGE_T *package){
+    // uint16_t checksum = 0;
+    int checksum = 0;
+    checksum += (package->header & 0xFF);
+    checksum += (package->header >> 8);
+    checksum += package->cmdId;
+    checksum += package->content_size;
+    for(int i=0; i<package->content_size; i++){
+        checksum += package->content[i];
+    }
+    
+    return (FSUS_CHECKSUM_T)(checksum%256);
+}
+
+FSUS_PACKAGE_SIZE_T getPackSize(const FSUS_PACKAGE_T *package){
+    // 包头(2 byte) + 指令ID(1byte) + 长度(1byte) + 内容 + 校验码(1byte)
+    return package->content_size + 5;
+}
 
 // 发送PING的请求包
 void sendPing(unsigned char servoId){
@@ -259,7 +286,7 @@ FSUS_STATUS recvQueryAngle(unsigned char *servoId, float *angle){
 }
 
 // 轮式控制模式
-void sendWheelMove(unsigned char servoId, unsigned char method, unsigned int speed, unsigned short value){
+void sendWheelMove(unsigned char servoId, unsigned char method, unsigned short speed, unsigned short value){
     requestPack.cmdId = FSUS_CMD_WHEEL;
     requestPack.content_size = 6;
     requestPack.content[0] = servoId;

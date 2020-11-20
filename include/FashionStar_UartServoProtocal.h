@@ -7,7 +7,9 @@ Fashion Star串口总线舵机通信协议
 #ifndef _FS_UART_SERVO_PROTOCAL_H
 #define _FS_UART_SERVO_PROTOCAL_H
 
-// #include <Arduino.h>
+typedef unsigned short uint16_t;
+typedef unsigned char uint8_t;
+
 // FSUS通信协议
 // 注: FSUS是Fashion Star Uart Servo的缩写
 
@@ -201,15 +203,15 @@ typedef float FSUS_SERVO_SPEED_T; //舵机转速的格式
 typedef unsigned int FSUS_POWER_T; //功率的格式 
 typedef unsigned int FSUS_HEADER_T; //帧头
 typedef unsigned char FSUS_PACKAGE_SIZE_T; //Package的长度格式
-// typedef unsigned char FSUS_CHECKSUM_T; // 校验和的数据类型
-typedef byte FSUS_CHECKSUM_T; // 校验和的数据类型
+ typedef unsigned char FSUS_CHECKSUM_T; // 校验和的数据类型
+//typedef byte FSUS_CHECKSUM_T; // 校验和的数据类型
 
 // 请求数据帧的结构体
 typedef struct{
     uint16_t header; // 请求头
     uint8_t cmdId; // 指令ID号
     uint8_t content_size; // 包的长度
-    byte content[FSUS_PACK_RESPONSE_MAX_SIZE]; // 包的内容
+    uint8_t content[FSUS_PACK_RESPONSE_MAX_SIZE]; // 包的内容
     FSUS_CHECKSUM_T checksum; // 校验和
     // 接收
     FSUS_STATUS recv_status; // Package的状态码
@@ -218,18 +220,18 @@ typedef struct{
 }FSUS_PACKAGE_T;
 
 // 串口通信舵机通信协议
-class FSUS_Protocal{
-public: 
-    unsigned long baudrate; //串口通信的波特率
-    HardwareSerial *serial; //串口
+
+//    unsigned long baudrate; //串口通信的波特率
+//    HardwareSerial *serial; //串口
     //请求数据缓冲区
     FSUS_PACKAGE_T requestPack;
     //发送数据的缓冲区
     FSUS_PACKAGE_T responsePack;
-    FSUS_Protocal(unsigned long baudrate);
-    FSUS_Protocal();
+//    FSUS_Protocal(unsigned long baudrate);
+//    FSUS_Protocal();
     void init(); // 资源初始化
     void init(unsigned long baudrate);
+    void FSUS_init();
     //串口总线舵机底层的通信协议相关的函数
     //加工并发送请求数据包
     void sendPack();
@@ -267,5 +269,5 @@ public:
     void sendWheelMoveTime(FSUS_SERVO_ID_T servoId, uint8_t is_cw, uint16_t speed, uint16_t nTime);
     // 轮式模式 旋转特定的圈数
     void sendWheelMoveNCircle(FSUS_SERVO_ID_T servoId, uint8_t is_cw, uint16_t speed, uint16_t nCircle);
-};
+
 #endif
